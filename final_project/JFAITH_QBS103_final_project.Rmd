@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyr)
 library(tidyverse)
 library(ggplot2)
+library(ggpubr)
 ```
 
 # Comparing Biomarkers to Covid-19
@@ -25,50 +26,40 @@ gene_data <- read.csv("data/QBS103_GSE157103_genes.csv")
 meta_data <- read.csv('data/QBS103_GSE157103_series_matrix-1.csv')
 ```
 
-### Gene isolation
-
-I chose to look at the ABCF1 gene becaue of it's role in retulating immune responses. Source: <https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0175918>
+### Function To Create Gene Specific Dataframe
 
 ```{r}
-# Select ABCF1 gene
-gene <- gene_data[which(gene_data$X=='ABCF1'), ]
+#gene_name = 'ABCF1'
+process_dataframe <- function(gene_name) {
+  # Select gene
+  gene <- gene_data[which(gene_data$X==gene_name), ]
+  
+  # Get all column names except X
+  column_names <- names(gene)[-1]
+  
+  #Melt dataframe
+  #referenced: https://tidyr.tidyverse.org/reference/pivot_longer.html
+  gene_long <- pivot_longer(
+                  gene, 
+                  cols = all_of(column_names), 
+                  names_to = "participant_id", 
+                  values_to = "expression")
+ 
+  gene_dataset <- inner_join(gene_long, meta_data, by="participant_id")
+  # referenced: https://datascienceplus.com/merging-datasets-with-tidyverse/
+   
+   gene_dataset$HospitalDaysGroup <- cut(
+      gene_dataset$hospital.free_days_post_45_day_followup,
+      breaks = c(0, 10, 20, 30, 40, 50),
+      labels = c('Under 10', '10-20', '20-30', '30-40', 'Over 40'),
+      right = FALSE
+    )
+   return (gene_dataset)
+}
 
-# Get all column names except X
-column_names <- names(gene)[-1]
-
-#Melt dataframe
-#referenced: https://tidyr.tidyverse.org/reference/pivot_longer.html
-gene_long <- pivot_longer(gene, cols = all_of(column_names), names_to = "participant_id", values_to = "expression")
-```
-
-### Merge metadata & gene data
-
-```{r}
-gene_dataset <- inner_join(gene_long, meta_data, by="participant_id")
-# referenced: https://datascienceplus.com/merging-datasets-with-tidyverse/
-
-
-# Check to see if every record in the gene data matched to the metadata table since inner joining
-if (nrow(gene_long) == nrow(meta_data)) {
-  print('All records matched and none were dropped through the merge')
-} else (
-  print('missing records')
-)
 ```
 
 ## Visualizations
-
-### Histogram for gene expression
-
-```{r}
-# Adding custom color category by days in the hospital
-gene_dataset$HospitalDaysGroup <- cut(
-  gene_dataset$hospital.free_days_post_45_day_followup,
-  breaks = c(0, 10, 20, 30, 40, 50),
-  labels = c('Under 10', '10-20', '20-30', '30-40', 'Over 40'),
-  right = FALSE
-)
-```
 
 ```{r}
 
@@ -89,31 +80,70 @@ myTheme <- theme(
         # Set plot background
         panel.background = element_blank()
         )
-
-
-ggplot(gene_dataset, aes(x = expression)) + 
-  geom_histogram(binwidth=1, color="white", fill='#004777') + 
-  labs(title="Gene Expression x Count of Participants", x = 'Gene Expression',y = 'Count') +
-  myTheme
 ```
 
-### Scatterplot for gene expression and continuous covariate
+Build a function to create the plots you made for Presentation 1, incorporating any feedback you received on your submission. Your functions should take the following input: (1) the name of the data frame, (2) a list of 1 or more gene names, (3) 1 continuous covariate, and (4) two categorical covariates (10 pts)
 
-```{r}
+```{r results='asis'}
 
-ggplot(gene_dataset, aes(x = expression, y = hospital.free_days_post_45_day_followup, color = HospitalDaysGroup)) + 
-  geom_point() + 
-  labs(title="Gene Expression vs Hospital Free Days", x = 'Gene Expression',y = 'Hospital Free Days')+
-  scale_color_manual(values = colorPalette)+
-  myTheme
+## documentation on working with .data[[]]
+##https://dplyr.tidyverse.org/articles/programming.html
+
+create_graphs <- function(
+                          dataframe_name, 
+                          gene_name, 
+                          continuous_covariate, 
+                          categorical_covariates
+                          ) {
+  
+  #https://stackoverflow.com/questions/69338331/r-markdown-create-section-headers-in-r-and-print-r-output-in-same-section
+  cat("\\newpage\n")
+  cat(paste0("# Visuals for ", gene_name, "\n\n"))
+  
+  histogram_title <- paste(gene_name, "x Count of Participants")
+  histogram <- ggplot(dataframe_name, aes(x = expression)) + 
+              geom_histogram(binwidth=1, color="white", fill='#004777') + 
+              labs(title=histogram_title, x = 'Gene Expression',y = 'Count') +
+              myTheme
+  
+  print(histogram)
+  
+  cleaned_continuous_covariate <- gsub("[._]", " ", continuous_covariate)
+  scatterplot_title <- paste("Gene Expression vs", cleaned_continuous_covariate)
+  
+  scatterplot <- ggplot(dataframe_name, aes(x = expression, y = .data[[continuous_covariate]])) + 
+              geom_point() + 
+              labs(title=scatterplot_title, x = 'Gene Expression',y = cleaned_continuous_covariate)+
+              scale_color_manual(values = colorPalette)+
+              myTheme
+  print(scatterplot)
+  
+  boxplot_title <- paste(gene_name, 'vs', categorical_covariates[1])
+  boxplot <- ggplot(
+              dataframe_name,
+              aes(
+                x = .data[[categorical_covariates[1]]],
+                y = expression,
+                color = .data[[categorical_covariates[2]]]
+              )) +
+            geom_boxplot() +
+            labs(
+              title = boxplot_title,
+              x = categorical_covariates[1],
+              y = 'Gene Expression'
+            ) +
+            scale_color_manual(values = colorPalette) +
+            myTheme
+  print(boxplot)
+}
 ```
 
-### Boxplot of gene expression separated by both categorical covariates
 
-```{r}
-ggplot(gene_dataset, aes(x = disease_status, y = expression, color=sex)) + 
-  geom_boxplot() +
-  labs(title="Gene Expression vs Covid-19 Status", x = 'Disease State',y = 'Gene Expression')+
-  scale_color_manual(values = colorPalette) +
-  myTheme
+# Displaying All Graphs
+```{r results='asis'}
+for (gene in c('ABCF1', 'AAGAB', 'ABAT')){
+  gene_df <- process_dataframe(gene)
+  create_graphs(gene_df, gene, 'hospital.free_days_post_45_day_followup', c('disease_status', 'sex'))
+}
 ```
+
