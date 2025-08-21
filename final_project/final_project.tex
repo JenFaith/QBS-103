@@ -1,0 +1,80 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{float}
+
+\title{Final Project}
+\author{Jennifer Faith}
+\date{August 2025}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+
+\section{Introduction}
+For this project, we analyzed two datasets that explored gene expression across patients from a hospital. The dataset provided various health measures, including the Charlson score, ferritin levels, and CRP, for 126 patients, as well as measures of their gene expression across 100 genes. The datasets also provided information on whether the individuals were positive for COVID-19. Throughout this analysis, the focus was placed on gene ABCF1 because it is believed to have a strong role in regulating immune response by shifting the body from attack mode back to a more relaxed mode at the end of an illness \cite{wilcox_role_2017}. The gene has been shown across other studies to play an important role in recovery from illnesses like sepsis \cite{arora_atp-binding_2019}. Our objective was to analyze a specific gene and investigate whether any patterns exist between that gene expression and health outcomes. 
+ 
+\section{Methods}
+The data sources we analyzed were provided by faculty and emerged from a study previously conducted. Throughout this project, the datasets were analyzed using R version 4.5.1. Many additional R libraries were utilized for various graphs, including bar charts, scatter plots, etc. These notable packages were tidyr \cite{tidyr2024}, tidyverse \cite{tidyverse2024}, knitr\cite{knitr}, and kableExtra \cite{kableextra}. To create a clustered heatmap, the R package pheatmap \cite{pheatmap} was used, and the Euclidean clustering algorithm was applied. This allows for the organization and sorting of data points to find the clearest pattern in the data.
+
+\section{Results}
+
+As shown in the summary table  \ref{tab:summary}, across all of the variables, there were a few notable trends. For starters, the mean age was on the older side, at 62.8 for healthy, non-COVID-19 positive patients, and the patients positive with COVID-19 were also in their 60s, with a mean age of 60.8. The reported gender of the patients was fairly balanced, but the study data showed a higher number of males testing positive for COVID. Finally, a higher percentage of patients without COVID-19 were in the ICU compared with patients who had COVID-19.
+
+\begin{table}[H]
+\centering
+\caption{Summary statistics for covariates}
+\label{tab:summary}
+\input{summary_table}
+\end{table}
+
+While analyzing a histogram of gene expression vs. count of participants as seen in Figure \ref{fig:1}, we observe a slight trend indicating that patients typically have lower gene expression of ABCF1 overall. Only a few patients had a gene expression of over 20 with the majority clustered around 5-15.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=1\textwidth]{bar.pdf}
+  \caption{Histogram of Gene Expression}
+  \label{fig:1}
+\end{figure}
+
+The analysis of ABCF1 gene expression compared with hospital-free days also showed an interesting trend when plotted in a scatterplot as seen in Figure \ref{fig:2}. Hospital-free days are the number of days in a 45-day period that an individual is not hospitalized. This means those with higher hospital-free days spent less time in the hospital. Those with more hospital-free days showed overall to have a slightly higher gene expression than the other groups. This is expected based on the research in the Introduction, which outlines ABCF1's role in immune system recovery. We would expect those healing from an illness to have a higher expression of ABCF1.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=1\textwidth]{scatter.pdf}
+  \caption{Gene Expression vs Hospital Free Days}
+  \label{fig:2}
+\end{figure}
+
+The analysis of ABCF1 gene expression compared with hospital-free days through a heatmap in Figure \ref{fig:3} shows a similar trend as the scatterplot, but helps highlight more clearly that the highest rates of gene expression for ABCF1 occurred in patients who spent less time in the hospital.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=1\textwidth]{density.pdf}
+  \caption{Gene Expression vs Hospital Free Days}
+  \label{fig:3}
+\end{figure}
+
+We then compared COVID-19 status, gene expression, and sex through a boxplot seen in Figure~\ref{fig:4}. This analysis indicated that the ABCF1 gene expression occurred at a higher rate in those who tested positive with COVID-19. Females overall tend to have a slightly higher rate of ABCF1 gene expression as well.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=1\textwidth]{whisker.pdf}
+  \caption{Gene Expression vs Covid-19 Status}
+  \label{fig:4}
+\end{figure}
+
+A heatmap shown in Figure~\ref{fig: Figure 4} provided a visualization on how ABCF1's expression would compare to other gene expressions. The plot indicates that while other genes also had some levels of expression, ABCF1 appears to have some of the strongest expression and tended to be seen more in those with COVID-19.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=1\textwidth]{heat.pdf}
+  \caption{Gene Expression Summary}
+  \label{fig: Figure 4}
+\end{figure}
+
+\bibliographystyle{plain}
+\bibliography{mybibliography}
+
+
+\end{document}

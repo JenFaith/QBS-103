@@ -1,8 +1,11 @@
 ---
 title: "JFAITH_QBS103_final_project"
-output: pdf_document
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
 date: "2025-07-12"
-editor_options: 
+editor_options:
   chunk_output_type: inline
 ---
 
@@ -12,6 +15,9 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyr)
 library(tidyverse)
 library(ggplot2)
+library(pheatmap)
+library(knitr)
+library(kableExtra)
 ```
 
 # Comparing Biomarkers to Covid-19
@@ -25,9 +31,40 @@ gene_data <- read.csv("data/QBS103_GSE157103_genes.csv")
 meta_data <- read.csv('data/QBS103_GSE157103_series_matrix-1.csv')
 ```
 
+### Clean Metadata
+
+```{r}
+# Cleaning disease status names
+cleaned_state <- function(status) {
+  if (status == "disease state: COVID-19") {
+    return("Diseased")
+  } else {
+    return("Healthy")
+  }
+}
+
+meta_data$covid_status <- sapply(meta_data$disease_status, cleaned_state)
+
+# shortening subject ids but preserving uniqueness
+shorten_subject_names <- function(name) {
+  split_name <- strsplit(name, "_")[[1]]   # split into pieces
+  
+  if (split_name[1] == "COVID") {
+    return(paste0("Subject_C", split_name[2]))
+    
+  } else {
+    return(paste0("Subject_N", split_name[2]))
+  }
+}
+
+meta_data$subject_id <- sapply(meta_data$participant_id, shorten_subject_names)
+#making sure shortened ID are all unique (i.e. still same number of unique ids as before)
+length(unique(meta_data$participant_id)) == length(unique(meta_data$subject_id))
+```
+
 ### Gene isolation
 
-I chose to look at the ABCF1 gene becaue of it's role in retulating immune responses. Source: <https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0175918>
+I chose to look at the ABCF1 gene becaue of it's role in regulating immune responses. Source: <https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0175918>
 
 ```{r}
 # Select ABCF1 gene
@@ -103,17 +140,182 @@ ggplot(gene_dataset, aes(x = expression)) +
 
 ggplot(gene_dataset, aes(x = expression, y = hospital.free_days_post_45_day_followup, color = HospitalDaysGroup)) + 
   geom_point() + 
-  labs(title="Gene Expression vs Hospital Free Days", x = 'Gene Expression',y = 'Hospital Free Days')+
+  labs(title="Gene Expression vs Hospital Free Days", 
+       x = 'Gene Expression',
+       y = 'Hospital Free Days',
+       color = "Hospital Days Group")+
   scale_color_manual(values = colorPalette)+
   myTheme
 ```
 
-### Boxplot of gene expression separated by both categorical covariates
+### Densite Chart
 
 ```{r}
-ggplot(gene_dataset, aes(x = disease_status, y = expression, color=sex)) + 
+ggplot(gene_dataset, aes(x = expression, y = hospital.free_days_post_45_day_followup)) +
+    stat_density_2d(aes(fill = ..density..), geom = "raster", contour = FALSE) +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0)) + 
+    scale_fill_gradientn(colors = c('#004777', '#A8D0DB', '#FFC857', '#F05D5E'))+
+    labs(title="Gene Expression vs Hospital Free Days", 
+         x = 'Gene Expression',
+         y = 'Hospital Free Days',
+         fill = "Density")+
+    myTheme
+```
+
+### Boxplot of gene expression separated by both categorical covariates
+
+```{r fig.width=6, fig.height=5, fig.cap="Gene Expression vs Hospital Free Days"}
+ggplot(gene_dataset, aes(x = covid_status, y = expression, color=sex)) + 
   geom_boxplot() +
-  labs(title="Gene Expression vs Covid-19 Status", x = 'Disease State',y = 'Gene Expression')+
-  scale_color_manual(values = colorPalette) +
+  labs(title="Gene Expression vs Covid-19 Status", 
+       x = 'Covid Status',
+       y = 'Gene Expression',
+       color = 'Sex')+
+  scale_color_manual(values = colorPalette, labels=str_to_title) +
   myTheme
 ```
+
+### Heatmap
+
+```{r}
+# Making X the row name
+gene_data <- gene_data[order(gene_data$X), ]
+rownames(gene_data) <- gene_data$X
+
+# Removing the extra X row
+gene_data = subset(gene_data, select = -c(X) )
+
+# Shortening subject ids just for display purposes
+colnames(gene_data) <- sapply(colnames(gene_data), shorten_subject_names)
+```
+
+```{r}
+annotationData <- data.frame(
+  row.names = meta_data$subject_id,
+  Status = factor(meta_data$covid_status,
+                  levels = c("Diseased", "Healthy"),
+                  labels = c("Diseased", "Healthy")),
+  Sex=factor(meta_data$sex, 
+             levels = c(" female", " male", " unknown"),
+             labels = c("Female", "Male", "Unknown"))
+  # I used ChatGPT here ^^ to figure out how to change the labels to capitals
+  # I was struggling to find documentation elsewhere
+)
+
+annotationColors <- list(
+  Status = c("Diseased" = "#F05D5E", "Healthy" = "lightyellow"),
+  Sex    = c("Female" = "#004777","Male" = "#A8D0DB","Unknown" = "#FFC857")
+)
+
+# Source: https://davetang.org/muse/2018/05/15/making-a-heatmap-in-r-with-the-pheatmap-package/
+
+# Generate heatmap with clustering
+pheatmap(gene_data[60:70, ],
+         cluster_rows = T,
+         cluster_cols = T,
+         annotation_col = annotationData,
+         annotation_colors = annotationColors,
+         color = colorRampPalette(c('#004777', '#A8D0DB', '#FFC857', '#F05D5E'))(100),
+         cluster_distance_cols='euclidean',
+         cluster_distance_rows='euclidean',
+         clustering_method = 'ward.D',
+         show_colnames = F,
+         main = "Gene Expression Annotated by COVID Disease Status and Sex "
+         )
+
+```
+
+```{r}
+# Make sure all relevant columns are numeric since I'm getting NA errors
+gene_dataset$age <- as.numeric(gene_dataset$age)
+gene_dataset$hospital.free_days_post_45_day_followup <- as.numeric(gene_dataset$hospital.free_days_post_45_day_followup)
+gene_dataset$expression <- as.numeric(gene_dataset$expression)
+
+# Variables by type
+continuous_variables <- c('expression', 'age', 'hospital.free_days_post_45_day_followup')
+covariates <- c('sex', 'icu_status')
+
+## function that creates the vector for me with the summary statistics
+## general ideas is it walks through the continuous variables and the 
+## covariate and appends each items summary stats to a vector
+summarize_function <- function(df) {
+  summary_vector <- c()
+  
+  # Continuous variables
+  # Append mean (sd) to vectro
+  for (var in continuous_variables) {
+    m <- mean(df[[var]], na.rm = TRUE)
+    s <- sd(df[[var]], na.rm = TRUE)
+    summary_vector <- c(summary_vector, paste0(round(m, 1), " (", round(s, 1), ")"))
+  }
+
+  # Sex
+  summary_vector <- c(summary_vector, "")
+  for (sex_cat in c(" female", " male", " unknown")) {
+    count <- sum(df$sex == sex_cat, na.rm = TRUE)
+    percent <- round((count / nrow(df)) * 100, 1)
+    summary_vector <- c(summary_vector, paste0(count, " (", percent, ")"))
+  }
+  
+  # ICU status
+  summary_vector <- c(summary_vector, "")
+  for (status in c(" no", " yes")) {
+    count <- sum(df$icu_status == status, na.rm = TRUE)
+    percent <- round((count / nrow(df)) * 100, 1)
+    summary_vector <- c(summary_vector, paste0(count, " (", percent, ")"))
+  }
+  
+  return(summary_vector)
+}
+
+```
+
+```{r}
+healthy_gd  <- gene_dataset[gene_dataset$covid_status == "Healthy", ]
+diseased_gd <- gene_dataset[gene_dataset$covid_status == "Diseased", ]
+
+healthy_n <- nrow(healthy_gd)
+diseased_n <- nrow(diseased_gd)
+
+healthy  <- summarize_function(healthy_gd)
+diseased <- summarize_function(diseased_gd)
+
+# Source:
+# https://vivdas.medium.com/create-latex-and-ms-word-tables-in-r-6ac919204247
+#Define Table
+table1 <- data.frame(
+  Variable = c('Gene ABCF1 Expression mean (sd)', 
+               'Age mean (sd)', 
+               'Hospital Free Days mean (sd)',
+               'Sex n (%)', 
+               'Female', 
+               'Male',
+               'Unknown', 
+               'ICU Status (%)',
+               'No',
+               'Yes'
+  ),
+  Healthy = healthy,
+  Diseased = diseased
+  )
+
+table1 <- kable(
+  table1,
+  format = "latex",
+  booktabs = TRUE,
+  col.names = c("Variable", 
+                paste0("Healthy (n=", healthy_n, ')'), 
+                paste0("Diseased (n=", diseased_n, ')')
+  ),
+  caption = "Summary Table",
+  align = c("l","r","r"),
+  escape = TRUE
+)%>%
+  add_indent(c(5, 6, 7, 9,10)) %>% 
+  kable_classic(full_width = FALSE)
+
+# Write LaTeX table code into a file 
+writeLines(table1, "summary_table.tex")
+```
+
